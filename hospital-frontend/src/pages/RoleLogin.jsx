@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
-import { registerUser } from "../services/authService";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { loginUser } from "../services/authService";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-export default function Register() {
+export default function RoleLogin() {
   const { role } = useParams();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    name: "",
     email: "",
     password: "",
   });
@@ -22,9 +21,17 @@ export default function Register() {
     pharmacist: "Pharmacist",
   };
 
-  // 🔐 Allow only Patient registration
+  const roleDashboards = {
+    admin: "/admin/dashboard",
+    doctor: "/doctor/dashboard",
+    patient: "/patient/dashboard",
+    receptionist: "/receptionist/dashboard",
+    pharmacist: "/pharmacist/dashboard",
+  };
+
+  // 🔒 Validate role
   useEffect(() => {
-    if (role !== "patient") {
+    if (!validRoles.includes(role)) {
       navigate("/");
     }
   }, [role, navigate]);
@@ -35,31 +42,36 @@ export default function Register() {
     e.preventDefault();
 
     try {
-      await registerUser({ ...form, role });
-      alert("Patient registered successfully");
-      navigate(`/login/${role}`);
+      const res = await loginUser({ ...form, role });
+
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", res.data.role);
+      localStorage.setItem("name", res.data.name);
+
+      alert(`Welcome ${res.data.name}`);
+      navigate(roleDashboards[res.data.role] || "/");
     } catch (err) {
-      alert(err?.response?.data?.message || "Registration failed");
+      alert(err?.response?.data?.message || "Login failed");
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">
             MediCare<span className="text-blue-600">+</span>
           </h1>
           <p className="text-slate-500 mt-1">
-            Patient Registration Portal
+            {roleLabels[role]} Login Portal
           </p>
         </div>
 
         {/* Card */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-8">
-          
+
           {/* Role Badge */}
           <div className="flex justify-center mb-6">
             <span className="bg-blue-50 text-blue-600 text-xs font-semibold px-4 py-1.5 rounded-full uppercase tracking-wide">
@@ -67,30 +79,15 @@ export default function Register() {
             </span>
           </div>
 
-          {/* Title */}
           <h2 className="text-xl font-semibold text-slate-800 text-center">
-            Create Your Account
+            Sign in to your account
           </h2>
           <p className="text-sm text-slate-500 text-center mt-1">
-            Secure access to your medical records
+            Enter your credentials to continue
           </p>
 
           {/* Form */}
           <form onSubmit={submit} className="mt-6 space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5
-                           focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-slate-700">
                 Email Address
@@ -99,7 +96,9 @@ export default function Register() {
                 type="email"
                 required
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, email: e.target.value })
+                }
                 className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5
                            focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
@@ -113,7 +112,9 @@ export default function Register() {
                 type="password"
                 required
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, password: e.target.value })
+                }
                 className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5
                            focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
@@ -124,25 +125,34 @@ export default function Register() {
               className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium
                          hover:bg-blue-700 transition-all duration-300 shadow"
             >
-              Create Account
+              Login
             </button>
           </form>
 
           {/* Links */}
           <div className="mt-6 text-center text-sm">
-            <p className="text-slate-600">
-              Already have an account?{" "}
-              <Link
-                to={`/login/${role}`}
-                className="text-blue-600 font-medium hover:underline"
-              >
-                Login
-              </Link>
-            </p>
+            <Link
+              to="/forgot-password"
+              className="text-blue-600 hover:underline"
+            >
+              Forgot Password?
+            </Link>
+
+            {role === "patient" && (
+              <p className="mt-3 text-slate-600">
+                Don’t have an account?{" "}
+                <Link
+                  to="/register/patient"
+                  className="text-blue-600 font-medium hover:underline"
+                >
+                  Register
+                </Link>
+              </p>
+            )}
 
             <Link
               to="/"
-              className="inline-block mt-4 text-slate-500 hover:text-slate-700"
+              className="block mt-4 text-slate-500 hover:text-slate-700"
             >
               ← Back to Role Selection
             </Link>

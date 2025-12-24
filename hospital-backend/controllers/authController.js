@@ -6,29 +6,49 @@ const transporter = require("../config/mail");
 
 // REGISTER
 exports.register = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  try {
+    const { name, email, password } = req.body;
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+    // 🔒 Only patient can self-register
+    const role = "patient";
 
-  const user = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-    role,
-  });
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
 
-  res.json({ message: "User Registered Successfully" });
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+    });
+
+    res.json({ message: "Patient registered successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Registration failed" });
+  }
 };
+
 
 // LOGIN
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
   const user = await User.findOne({ email });
   if (!user) return res.status(400).json({ message: "User not found" });
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(400).json({ message: "Invalid password" });
+
+  // If role is provided in request, validate it matches user's role
+  if (role && user.role !== role) {
+    return res.status(403).json({ 
+      message: `This login is for ${role} only. Your account is ${user.role}.` 
+    });
+  }
 
   const token = jwt.sign(
     { id: user._id, role: user.role },
@@ -53,8 +73,14 @@ exports.forgotPassword = async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.resetOTP = otp;
-    user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 min
+    const hashedOTP = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    user.resetOTP = hashedOTP;
+    user.otpExpiry = Date.now() + 10 * 60 * 1000;
+
     await user.save();
 
     await transporter.sendMail({
@@ -79,9 +105,14 @@ exports.forgotPassword = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
+  const hashedOTP = crypto
+    .createHash("sha256")
+    .update(otp)
+    .digest("hex");
+
   const user = await User.findOne({
     email,
-    resetOTP: otp,
+    resetOTP: hashedOTP,
     otpExpiry: { $gt: Date.now() },
   });
 
@@ -90,8 +121,8 @@ exports.resetPassword = async (req, res) => {
   }
 
   user.password = await bcrypt.hash(newPassword, 10);
-  user.resetOTP = null;
-  user.otpExpiry = null;
+  user.resetOTP = undefined;
+  user.otpExpiry = undefined;
 
   await user.save();
 
